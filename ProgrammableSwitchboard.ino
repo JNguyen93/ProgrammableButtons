@@ -50,8 +50,12 @@ int inputs[10];
 int input;
 int sol[10];
 int prog[10] = {0, 0, 9, 9, 4, 4, 5, 5, 7, 7};
+int flagsLen, flagpsLen, buttonsLen, inputsLen, solLen, progLen;
+unsigned long lastReset, lastInput;
 
 void setup() {
+  Serial.begin(9600);
+  Serial.println("Programmable Switchboard");
   input = 0;
   flagp0 = false;
   flagp1 = false;
@@ -94,53 +98,82 @@ void setup() {
   buttons[8] = button8;
   buttons[9] = button9;
   correct = false;
+  setting = false;
+  programming = false;
+  flagsLen = sizeof(flags)/sizeof(flags[0]);
+  flagpsLen = sizeof(flagps)/sizeof(flagps[0]);
+  buttonsLen = sizeof(buttons)/sizeof(buttons[0]);
+  inputsLen = sizeof(inputs)/sizeof(inputs[0]);
+  solLen = sizeof(sol)/sizeof(sol[0]);
+  progLen = sizeof(prog)/sizeof(prog[0]);
+  lastReset = 0;
+  lastInput = 0;
   
-  for (int a = 0; a < (sizeof(buttons)/sizeof(buttons[0])) - 1; a++){
+  for (int a = 0; a < buttonsLen; a++){
     pinMode(buttons[a], INPUT);
   }
   pinMode(resetbutton, INPUT);
   pinMode(lightbulb, OUTPUT);
 
-  for (int b = 0; b < (sizeof(sol)/sizeof(sol[0])) - 1; b++){
-    sol[b] = 0;
+  Serial.println("Initializing Solution: ");
+  for(int i = 0; i < solLen; i++){
+    Serial.print(sol[i]);
   }
+  Serial.println();
 }
 
 void loop() {
   //Reset
   reset = digitalRead(resetbutton);
-  if (reset){
-    for (int j = 0; j < (sizeof(inputs)/sizeof(inputs[0])) - 1; j++){
-      inputs[j] = 0;
-    }
-    input = 0;
-  }
 
-  //Main Loop
-  for (int i = 0; i < (sizeof(flags)/sizeof(flags[0])) - 1; i++){
-    flags[i] = digitalRead(buttons[i]);
-    delay(5);
-    
-    if (flags[i] != flagps[i]){
-      if (flags[i]){
-        inputs[input] = i;
-        if(input >= 9){
-          input = 0;
-        }
-        else{
-          input++;
-        }
+  //Programming Confirmation
+  if (setting && reset){
+    Serial.println("Programming Finished");
+    for(int j =  0; j < inputsLen; j++){
+      sol[j] = inputs[j];
+    }
+    setting = false;
+    for(int i = 0; i < solLen; i++){
+      Serial.print(sol[i]);
+    }
+    Serial.println();
+  }
+  else if (!setting && reset){
+    if (millis() - lastReset > 200){
+      Serial.println("Resetting...");
+      for (int j = 0; j < inputsLen; j++){
+        inputs[j] = 0;
       }
-      delay(50);
+      input = 0;
+      lastReset = millis();
     }
-    flagps[i] = flags[i];
   }
-
+  else{
+    //Main Loop*
+    for (int i = 0; i < flagsLen; i++){
+      flags[i] = digitalRead(buttons[i]);
+      //delay(5);
+      if (flags[i] != flagps[i] && millis() - lastInput > 200){
+        if (flags[i]){
+          Serial.println(i);
+          inputs[input] = i;
+          if(input >= 9){
+            input = 0;
+          }
+          else{
+            input++;
+          }
+        }
+        lastInput = millis();
+      }
+      flagps[i] = flags[i];
+    }
+  }
   //Programming Check
   programming = checkEqual(inputs, prog);
 
   if (programming && !setting) {
-    for (int j = 0; j < (sizeof(inputs)/sizeof(inputs[0])) - 1; j++){
+    for (int j = 0; j < inputsLen; j++){
       inputs[j] = 0;
     }
     input = 0;
@@ -151,21 +184,16 @@ void loop() {
   correct = checkEqual(inputs, sol);
 
   if (correct && !setting){
-    digitalWrite(lightbulb, LOW);
-  }
-  else{
     digitalWrite(lightbulb, HIGH);
   }
-
-  //Programming Confirmation
-  if (setting && reset){
-    memcpy(sol, inputs, sizeof(inputs[0])*sizeof(inputs));
-    setting = false;
+  else{
+    digitalWrite(lightbulb, LOW);
   }
+
 }
 
 bool checkEqual(int inputs[], int sol[]){
-  for (int x = 0; x < (sizeof(sol)/sizeof(sol[0])) - 1; x++){
+  for (int x = 0; x < solLen; x++){
     if(inputs[x] != sol[x]){
       return false;
     }
